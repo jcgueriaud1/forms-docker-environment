@@ -56,6 +56,19 @@ if [ ! -d "$DOMAIN_HOME" ]; then
 fi
 
 #---------------------------------------------------------------------
+# 1b) A container that was killed instead of stopped cleanly leaves OHS's
+#     httpd.pid behind. Before starting, OHS runs "httpd -k stop", which
+#     signals that PID; in the new container it often belongs to
+#     NodeManager, which dies and takes the OHS start with it. Remove the
+#     file unless it points at a running httpd.
+#---------------------------------------------------------------------
+PIDFILE=$DOMAIN_HOME/servers/${OHS_COMPONENTNAME:-ohs1}/logs/httpd.pid
+if [ -f "$PIDFILE" ] && ! ps -p "$(cat "$PIDFILE")" -o comm= 2>/dev/null | grep -q httpd; then
+  rm -f "$PIDFILE"
+  log "Removed stale $PIDFILE"
+fi
+
+#---------------------------------------------------------------------
 # 2) NodeManager + AdminServer
 #---------------------------------------------------------------------
 if ! is_up 5556 "$NM_HOST"; then

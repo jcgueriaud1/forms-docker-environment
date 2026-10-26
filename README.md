@@ -114,6 +114,11 @@ config section.
   characters are lost.
 - **Linux file names are case-sensitive.** `OPEN_FORM('ORDERS')` won't find
   `orders.fmx`.
+- **Stop the containers cleanly** (`docker compose stop`, which waits up to 2
+  minutes). A killed container leaves OHS's `httpd.pid` behind. On the next
+  start, OHS's "stop" step signals that PID, which may now belong to
+  NodeManager: NodeManager dies and port 7777 never answers. `frrun.sh`
+  removes a stale `httpd.pid` before starting.
 - **Docker Desktop single-file bind mounts go stale** after the file is edited
   on the host. Restart the container, or `docker cp` the file instead.
 

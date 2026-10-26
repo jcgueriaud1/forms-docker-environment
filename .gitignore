@@ -1,0 +1,5 @@
+# Oracle installers: licensed by Oracle, never committed
+*.jar
+*.bin
+*.zip
+.DS_Store

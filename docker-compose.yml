@@ -1,0 +1,110 @@
+# Oracle Forms 12.2.1.4 + Oracle Database XE 21c, for local development.
+#
+#   docker compose up -d          first start builds the Forms domain (slow)
+#   docker compose logs -f frfmw  done at "Startup complete"
+#   docker compose stop           keeps all state (volumes)
+#
+# Build the oracle/formsreports:12.2.1.4 image first (build-images.sh).
+# Passwords here are local-demo defaults: change them for anything shared.
+#
+services:
+  frdb:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: frdb
+    hostname: frdb
+    stop_grace_period: 2m                # let the database shut down cleanly
+    environment:
+      - ORACLE_PASSWORD=Oracle12c        # SYS / SYSTEM
+    ports:
+      - "1521:1521"
+    volumes:
+      - frdb_data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]    # shipped in the gvenzl images
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 60s
+    networks:
+      - frnet
+
+  frfmw:
+    image: oracle/formsreports:12.2.1.4
+    container_name: frfmw
+    hostname: frfmw
+    stop_grace_period: 2m
+    depends_on:
+      frdb:
+        condition: service_healthy
+    # Builds the domain on first start, then starts everything (see frrun.sh).
+    command: /bin/bash -c "sleep 5s; /bin/bash /frrun.sh"
+    ports:
+      - "7001:7001"     # WebLogic AdminServer / EM console
+      - "9001:9001"     # WLS_FORMS managed server (direct Forms servlet access)
+      - "7777:7777"     # Oracle HTTP Server (Forms front end)
+    environment:
+      # --- middleware homes (match the image's ORACLE_HOME=/opt/oracle) ---
+      - SCRIPT_HOME=/opt/oracle/dockertools
+      - INT_ORACLE_HOME=/opt/oracle
+      - WL_HOME=/opt/oracle/wlserver
+      - WLST_HOME=/opt/oracle/oracle_common/common/bin
+      - MW=/opt/oracle
+      - DOMAIN_BASE=/opt/oracle/user_projects/domains
+      - APPLICATION_BASE=/opt/oracle/user_projects/applications
+      - APP_VZ=/opt/oracle/user_projects/applications
+      - TEMPLATE=/opt/oracle/wlserver/common/templates/wls/wls.jar
+      # --- what to configure: Forms + OHS, no Reports (saves memory) ---
+      - FORMS12C=true
+      - FADS12C=false
+      - REPORTS12C=false
+      - WEBTIER12C=true
+      - REPORTS_IN_FORMS=false
+      - REP_SERVER=false
+      - OHS_COMPONENTNAME=ohs1
+      - OHS_LISTENPORT=7777
+      - OHS_SSLPORT=4443
+      # --- domain / admin ---
+      - DOMAIN_NAME=FRDEMO
+      - AS_NAME=AdminServer
+      - ADM_USER=weblogic
+      - ADM_PWD=welcome1
+      - ADMINPORT=7001
+      - ADMINPORTSSL=7101
+      - AS_HOST=frfmw
+      # --- Forms managed server ---
+      - FORMS_MS_NAME=WLS_FORMS
+      - FORMS12C_MS_PORT=9001
+      # --- Reports managed server (unused, REPORTS12C=false) ---
+      - REPORTS_MS_NAME=WLS_REPORTS
+      - REPORTS12C_MS_PORT=9002
+      - REP_SERVER_NAME=repserver1
+      # --- node manager ---
+      - NM_LISTENADDRESS=frfmw
+      - NM_TYPE=SSL
+      - NM_PORT=5556
+      - NM_USERNAME=nodemanager
+      - NM_PWD=welcome1
+      # --- RCU schemas, in the XE pluggable database ---
+      - DBUSER=sys
+      - DBPWD=Oracle12c
+      - DBROLE=SYSDBA
+      - COMPONENTPWD=Oracle12c
+      - SCHEMA_PREFIX=FRDEMO
+      - DB_HOST=frdb
+      - DB_PORT=1521
+      - DB_SERVICE=XEPDB1
+      - DB_OMF=false
+      - DB_USER_PW=Oracle12c
+      - PWDFILE=/tmp/passwords.txt
+    volumes:
+      - frfmw_domains:/opt/oracle/user_projects
+      - ./frrun.sh:/frrun.sh:ro
+    networks:
+      - frnet
+
+volumes:
+  frdb_data:
+  frfmw_domains:
+
+networks:
+  frnet:
